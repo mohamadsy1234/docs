@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agent Bridge</string>
+    <string name="channel_shadow">اقتراحات الردود</string>
+    <string name="channel_alerts">تنبيهات الجسر</string>
+    <string name="shadow_title">🤖 اقتراح رد لـ %1$s</string>
+    <string name="action_send">إرسال فوراً</string>
+    <string name="action_ignore">تجاهل</string>
+    <string name="expired">انتهت صلاحية الاقتراح</string>
+    <string name="send_failed">تعذّر الإرسال: الرسالة الأصلية لم تعد متاحة (%1$s)</string>
+    <string name="untrusted_server">خادم غير موثوق على المنفذ 8000</string>
+    <string name="untrusted_server_detail">فشل التحقق من هوية الوكيل عدة مرات. قد يكون تطبيق آخر يحجز المنفذ.</string>
+    <string name="secret_label">المفتاح السري (انسخه إلى ~/.config/agent/.env في Termux):</string>
+    <string name="copy">نسخ</string>
+    <string name="copied">نُسخ</string>
+    <string name="consent">أوافق على إرسال نص الرسائل الواردة إلى الوكيل، ومنه إلى مزوّد LLM سحابي (mvp-1-spec 5)</string>
+    <string name="grant_listener">منح صلاحية قراءة الإشعارات</string>
+    <string name="grant_post">السماح بعرض الإشعارات</string>
+</resources>

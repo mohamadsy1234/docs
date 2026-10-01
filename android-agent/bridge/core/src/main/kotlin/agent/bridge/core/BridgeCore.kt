@@ -109,6 +109,7 @@ class BridgeCore<H>(
 
     /** Stage 4: the user tapped [Send now] (the system already required an unlock). */
     fun onUserSend(token: String) {
+        ui.cancel(token) // the shadow notification is done whatever happens next
         val entry = store.take(token)
         val text = entry?.proposedText
         if (entry == null || text == null) {

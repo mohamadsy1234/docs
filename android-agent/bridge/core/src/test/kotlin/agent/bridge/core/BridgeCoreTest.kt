@@ -91,6 +91,7 @@ class BridgeCoreTest {
         assertEquals(Triple(token, "Ahmed", "تمام"), ui.shown.single())
         core.onUserSend(token)
         assertEquals("pi-k1-1" to "تمام", fired.single())
+        assertTrue(token in ui.cancelled, "shadow notification left on screen after sending")
         val report = sentToAgent.last()
         assertEquals("\"notification_sent\"", report["type"].toString())
         assertTrue("sent" in audit)
