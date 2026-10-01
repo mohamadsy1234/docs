@@ -5,3 +5,4 @@
 ## الوثائق
 
 1. [الطبقة الأولى: تطبيق الجسر وتطويرات الإنتاج](01-bridge-app-architecture.md)
+2. [الطبقة الثانية: عقل الوكيل (Python Agent Brain)](02-python-agent-brain.md) — مسودة
