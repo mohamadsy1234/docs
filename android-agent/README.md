@@ -9,4 +9,5 @@
 
 ## أعمال معلّقة
 
-- Layer 1 تحتاج PR لاحقاً لتوحيد عقد البيانات (`action`/`params`/`locator`) وحذف `command`/`target_node_id`/`min_version_required` من طلب التنفيذ. يبقى `node_id` في رد الـ snapshot فقط، ولا يعود Python يرسله في الطلبات.
+- Layer 1 تحتاج PR لاحقاً لتوحيد عقد البيانات (`action`/`params`/`locator`) وحذف `command`/`target_node_id`/`min_version_required` من طلب التنفيذ. يبقى `node_id` في رد الـ snapshot فقط، ولا يعود Python يرسله في الطلبات. ويُضاف `screen_instance` إلى رد الـ snapshot (انظر 0.5.3).
+- **Blocker:** Section 2 (Bridge Client) لا يبدأ قبل حسم آلية الاقتران الأولى، أي كيف يصل المفتاح B إلى Termux أول مرة بشكل آمن (انظر 0.6).
