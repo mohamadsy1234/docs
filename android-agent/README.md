@@ -9,6 +9,11 @@
 1. [الطبقة الأولى: تطبيق الجسر وتطويرات الإنتاج](01-bridge-app-architecture.md)
 2. [الطبقة الثانية: عقل الوكيل (Python Agent Brain)](02-python-agent-brain.md) — مسودة
 
+## الشيفرة
+
+- [`agent/agent.py`](agent/agent.py): هيكل Python Agent لـ Sprint 0 (عقد التشغيل في Section 1).
+- الاختبارات: `python3 -m unittest discover -s android-agent/agent/tests -v`
+
 ## أعمال معلّقة
 
 - Layer 1 تحتاج PR لاحقاً لتوحيد عقد البيانات (`action`/`params`/`locator`) وحذف `command`/`target_node_id`/`min_version_required` من طلب التنفيذ. يبقى `node_id` في رد الـ snapshot فقط، ولا يعود Python يرسله في الطلبات. ويُضاف `screen_instance` إلى رد الـ snapshot (انظر 0.5.3).
