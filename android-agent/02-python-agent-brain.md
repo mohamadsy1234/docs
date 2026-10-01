@@ -1,31 +1,43 @@
 # هندسة وكيل الذكاء الاصطناعي المستقل على أندرويد: الطبقة الثانية — عقل الوكيل (Python Agent Brain)
 
-> **الحالة:** مسودة — Section 0 مكتوب وقيد المراجعة.
+> **الحالة:** مسودة — Section 0 (الإصدار 2) قيد المراجعة. القسمان 0.5 و0.6 جديدان ومعلَّمان **للمراجعة**.
 >
-> تعتمد هذه الوثيقة على [الطبقة الأولى: تطبيق الجسر](01-bridge-app-architecture.md).
+> تعتمد هذه الوثيقة على [الطبقة الأولى: تطبيق الجسر](01-bridge-app-architecture.md). عقد البيانات في هذا القسم يحلّ محل عقد الطبقة الأولى (انظر 0.1)، والطبقة الأولى ستُوحَّد معه في PR لاحق.
 
 ---
 
 ## 0. القرارات التأسيسية (Foundation Decisions)
 
-هذا القسم يُثبّت أربع قرارات لا رجعة فيها قبل كتابة أي كود في Python. الغرض: منع تغيير المعمارية في منتصف Sprint 5، حيث تكون التكلفة مضاعفة ثلاث مرات.
+هذا القسم يُثبّت ست قرارات لا رجعة فيها قبل كتابة أي كود في Python. الغرض: منع تغيير المعمارية في منتصف Sprint 5، حيث تكون التكلفة مضاعفة ثلاث مرات.
 
 القرارات مترابطة: كل قرار يُضيّق مساحة القرار الذي يليه. لذلك الترتيب إلزامي.
 
 ```text
-┌──────────────────────────────────────────────────────────┐
-│  0.1  مفردات الإجراءات      → العقد بين Python وBridge   │
-│         │                                                │
-│         ▼                                                │
-│  0.2  القرار A: المُخطِّط    → من يبني الخطط؟            │
-│         │                                                │
-│         ▼                                                │
-│  0.3  القرار B: الميتا-لوب  → أين يعيش التفكير؟          │
-│         │                                                │
-│         ▼                                                │
-│  0.4  المحلل الثابت للخطط   → من يوقف الخطة قبل تنفيذها؟ │
-└──────────────────────────────────────────────────────────┘
+0.1  مفردات الإجراءات          → العقد بين Python وBridge
+ │
+ ▼
+0.2  القرار A: المُخطِّط        → من يبني الخطط؟
+ │
+ ▼
+0.3  القرار B: الميتا-لوب      → أين يعيش التفكير؟
+ │
+ ▼
+0.4  المحلل الثابت للخطط       → من يرفض الخطة مبكراً؟
+ │
+ ▼
+0.5  النية والمحددات والطبقات  → من يفرض حدود الأثر؟ (Bridge)
+ │
+ ▼
+0.6  تسلسل المفاتيح            → بأي سلطة يُوقَّع كل شيء؟
 ```
+
+### مبدأ الثقة الحاكم
+
+**Python طرف غير موثوق.** كل ما يُنتجه (الخطط، النيات، التحليل) قد يكون خاطئاً أو مخترَقاً أو ناتجاً عن هلوسة LLM. لذلك:
+
+- الفحوصات في Python (المحلل الثابت 0.4) **بوابة جودة**: ترفض مبكراً لتوفير الوقت وتحسين التخطيط.
+- الفحوصات في Bridge (0.5) **بوابة أمان**: هي وحدها التي يُعتمد عليها لمنع الضرر.
+- أي قاعدة أمان موجودة في Python فقط تُعدّ غير موجودة.
 
 ---
 
@@ -33,68 +45,65 @@
 
 **المشكلة:** بدون لغة مشتركة مُقنَّنة بين Python وBridge، سيُنتج كل مطور شكلاً مختلفاً من نفس الإجراء. بعد أسبوعين، لن يستطيع المُحلل الثابت تحليل شيء، لأن كل إجراء له شكل مختلف.
 
-**القرار:** تُعرَّف مفردات مغلقة (Closed Set) من ~15 إجراءً ذرياً، بأسماء ثابتة، ومخطط JSON صارم. أي إجراء خارج هذه القائمة يُرفض في Bridge قبل التنفيذ.
+**القرار:** تُعرَّف مفردات مغلقة (Closed Set) من 14 إجراءً ذرياً، بأسماء ثابتة بصيغة `channel.action`، ومخطط JSON صارم. أي إجراء خارج هذه القائمة يُرفض في Bridge قبل التنفيذ (`UNKNOWN_ACTION`).
 
 #### الجدول المرجعي للإجراءات
 
-| الإجراء | النوع | القناة المفضلة | معاملات إلزامية | معاملات اختيارية | يُحتاج Key C؟ |
-| --- | --- | --- | --- | --- | --- |
-| `open_app` | Navigation | Intent | `package` | `deep_link` | لا |
-| `open_deep_link` | Navigation | Intent | `uri` | — | لا |
-| `tap` | Interaction | A11y | `node_id` | `long_press` | لا |
-| `tap_by_text` | Interaction | A11y | `text` | `exact_match` | لا |
-| `set_text` | Input | A11y | `node_id`, `text` | `clear_first` | لا |
-| `paste_text` | Input | A11y | `node_id` | — | لا |
-| `scroll` | Interaction | A11y | `direction` | `distance_px` | لا |
-| `back` | Navigation | A11y | — | — | لا |
-| `home` | Navigation | A11y | — | — | لا |
-| `reply_notification` | Messaging | Notification | `reply_token`, `text` | — | نعم |
-| `dismiss_notification` | Cleanup | Notification | `notification_key` | — | لا |
-| `send_intent_action` | Messaging | Intent | `uri`, `package` | `extras` | نعم |
-| `observe` | Read-only | A11y | `target`, `depth` | `expected_version` | لا |
-| `wait` | Timing | Local | `ms` | — | لا |
-| `abort` | Control | Local | `reason` | — | لا |
+| الإجراء | النوع | معاملات إلزامية | معاملات اختيارية | فئات الأثر الممكنة |
+| --- | --- | --- | --- | --- |
+| `intent.open_app` | Navigation | `package` | `deep_link` | `navigate` |
+| `intent.open_deep_link` | Navigation | `uri` | — | `navigate`، `prefill` |
+| `intent.send` | Messaging | `uri`, `package` | `extras` | `send_message` |
+| `a11y.click` | Interaction | `locator`, `lock_version` | `long_press` | حسب العنصر (0.5) |
+| `a11y.set_text` | Input | `locator`, `text`, `lock_version` | `clear_first` | `ui_input` |
+| `a11y.paste_text` | Input | `locator`, `lock_version` | — | `ui_input` |
+| `a11y.scroll` | Interaction | `direction` | `locator`, `distance_px` | `none` |
+| `a11y.back` | Navigation | — | — | `navigate` |
+| `a11y.home` | Navigation | — | — | `navigate` |
+| `a11y.observe` | Read-only | `target`, `depth` | `expected_version` | `none` |
+| `notif.reply` | Messaging | `notification_key`, (`text` أو `template_id`) | — | `send_message` |
+| `notif.dismiss` | Cleanup | `notification_key` | — | `dismiss` |
+| `local.wait` | Timing | `ms` | — | `none` |
+| `local.abort` | Control | `reason` | — | `none` |
 
-**قواعد التصنيف:**
+**ملاحظات على التصنيف:**
 
-- الإجراءات ذات Key C = نعم لا يمكن تنفيذها إلا بعد موافقة بيومترية أو توقيع مستخدم صريح. هذا يمنع LLM من إرسال رسالة بالنيابة عن المستخدم دون إذن.
-- `reply_notification` يُصنَّف "خطير" لأن الردّ النصي على شخص حقيقي فعل لا رجعة فيه.
-- `observe` لا يُغيّر حالة، لكنه يُنتج بيانات — يُسجَّل دائماً في Journal.
+- **لا يوجد عمود "يحتاج Key C" بعد الآن.** الحاجة إلى التوقيع لا تُحدَّد باسم الإجراء بل بأثره ونيته ومستلمه (انظر 0.5). هذا يُغلق الالتفاف الذي كان يسمح بإرسال رسالة عبر `a11y.set_text` + `a11y.click` دون Key C.
+- `tap_by_text` حُذف: النص صار نوعاً من أنواع المحددات (`locator.text`)، فلا حاجة لإجراء مستقل.
+- `a11y.observe` لا يُغيّر حالة، لكنه يُنتج بيانات — يُسجَّل دائماً في Journal.
 
-#### مخطط JSON موحّد لكل إجراء
+#### عقد البيانات الموحّد
 
 ```json
 {
-  "action_id": "uuid-v4",
-  "verb": "tap",
-  "params": { "node_id": "node_abc123", "long_press": false },
-  "context": {
-    "state_version": 1043,
-    "human_presence": "FREE",
-    "goal_id": "reply_to_ahmed",
-    "timestamp": 1775012345678
+  "action": "a11y.click",
+  "params": {
+    "locator": { "role": "send_button", "scope": "current_conversation" },
+    "lock_version": 1043
   },
-  "signature": {
-    "key_id": "B",
-    "value": "base64...",
-    "nonce": "base64...",
-    "expires_at": 1775012348000
-  }
+  "plan_token": "pt_7f3c9a2e",
+  "nonce": "base64...",
+  "timestamp": 1775012345,
+  "signature": "hmac-sha256:..."
 }
 ```
 
-**قاعدة الحسم:** `verb` واحد فقط لكل طلب. لا Batches. لماذا؟
+- `action` و`params` من الطبقة الأولى يُعتمدان. `verb` و`node_id` و`target_node_id` يُحذفون نهائياً.
+- `plan_token` يُصدره Bridge (انظر 0.5) ويحمل النية المعلنة. لا يُرسل Python نيته مع كل إجراء، بل تُقرأ من الـ token.
+- `signature` = HMAC بالمفتاح B (انظر 0.6) على الحقول الأخرى.
+
+**قاعدة الحسم:** إجراء واحد فقط لكل طلب. لا Batches. لماذا؟
 
 - Batch يُخفي أي إجراء فشل.
 - ACK يصبح غامضاً.
 - Rollback شبه مستحيل.
 
-إن أردت تسلسل إجراءات، أرسلها منفردة، واستخدم `state_version` للتأكد من التسلسل. تكلفة زمن الوصول (~5ms عبر AIDL) لا تبرر Batch.
+إن أردت تسلسل إجراءات، أرسلها منفردة تحت نفس `plan_token`. تكلفة زمن الوصول عبر WebSocket المحلي بين Python وBridge واقعياً 20–50ms لكل إجراء، وهي مقبولة لمهام يكون فيها زمن تحديث الواجهة نفسه أطول. (AIDL يُستخدم داخل Bridge فقط بين وحداته، لا بين Python وBridge.)
 
 #### معايير القبول لـ 0.1
 
 - [ ] جدول الإجراءات مُثبَّت في `android-agent/action-vocabulary.md` كمرجع.
-- [ ] Bridge يرفض أي `verb` غير مدرج في القائمة (`reason: "UNKNOWN_VERB"`).
+- [ ] Bridge يرفض أي `action` غير مدرج في القائمة (`reason: "UNKNOWN_ACTION"`).
 - [ ] Python Client يحوي Type Enum يُطابق الجدول 1:1.
 - [ ] كل إجراء له Unit Test يتحقق من: schema + سلوك معامل افتراضي + رمز خطأ واحد على الأقل.
 
@@ -117,7 +126,7 @@
 
 #### القرار: الهجين
 
-الهجين بترتيب صارم:
+بترتيب صارم:
 
 ```text
 1. HTN Planner يُجرَّب أولاً بأسلوب First-Match.
@@ -128,45 +137,49 @@
 2. LLM Output يُمرَّر إجبارياً على:
    ├─ Schema Validator (يطابق 0.1)
    ├─ Static Analyzer (0.4)
-   └─ Safety Gate (الطبقة 1) للتوقيع
+   └─ Bridge: plan_token + فحص الأثر لكل إجراء (0.5)
 ```
 
 #### لماذا هذا الترتيب تحديداً؟
 
 - **HTN أولاً** لأن 80% من مهام الواتساب اليومية نمطية: فتح محادثة، رد، إرسال وسائط. لا معنى لاستدعاء LLM لها.
 - **LLM للمجهول** لأن الفشل النمطي يعني إما واجهة تغيّرت أو مهمة جديدة — كلاهما يستدعي تفكيراً مرناً.
-- **HTN لا يُستبدل** حتى مع تحسّن LLM، لأن HTN يمنح قابلية تحليل ثابت قبل التنفيذ، وهذا ما يحتاجه Safety Gate.
+- **HTN لا يُستبدل** حتى مع تحسّن LLM، لأن HTN يمنح قابلية تحليل ثابت قبل التنفيذ.
 
 #### مكتبة HTN المقترحة
 
-`pyhop` أو `SHOP2` — كلتاهما بايثون خالص، خفيفتان، ويمكن تشغيلهما داخل Termux دون تبعيات ثقيلة.
+`GTPyhop` — مكتوبة بـ Python خالص، مُصانة، خفيفة، وتدعم HTN بشكل حديث، ويمكن تشغيلها داخل Termux دون تبعيات ثقيلة.
 
-بنية المجال (Domain):
+بنية المجال (Domain) — الخطوات تحمل محددات لا `node_id`:
 
 ```text
 domain(whatsapp) {
-  task reply_to_message(sender, content)
-    method reply_via_notification
-      precond: notification_active(sender)
-      subtasks: [ reply_notification(token, content) ]
+  task reply_to_message(recipient, content)
+    intent: reply_to(recipient)
 
-    method reply_via_chat
-      precond: app_foregrounded("whatsapp")
-      subtasks: [
-        observe(target="whatsapp_chat", depth="focused"),
-        set_text(node=find_input_field(), text=content),
-        tap(node=find_send_button())
-      ]
+    method reply_via_notification
+      precond: notification_active(recipient)
+      subtasks: [ notif.reply(notification_key, content) ]
 
     method reply_via_deeplink
-      precond: has_phone_number(sender)
+      precond: has_phone_number(recipient)
       subtasks: [
-        open_deep_link("whatsapp://send?phone=X&text=Y")
+        intent.open_deep_link("whatsapp://send?phone=X&text=Y"),
+        a11y.click(locator={role: "send_button", scope: "current_conversation"})
+      ]
+
+    method reply_via_chat
+      precond: conversation_open_and_verified(recipient)
+      subtasks: [
+        a11y.set_text(locator={role: "message_input"}, text=content),
+        a11y.click(locator={role: "send_button", scope: "current_conversation"})
       ]
 }
 ```
 
-ترتيب الطرق (Methods) مهم: الأسرع والأكثر موثوقية أولاً. Notification > Deep Link > UI Automation.
+- ترتيب الطرق مهم: الأسرع والأكثر موثوقية أولاً. Notification > Deep Link > UI Automation.
+- رابط `whatsapp://send` يملأ النص مسبقاً ولا يُرسل؛ خطوة النقر على زر الإرسال إلزامية.
+- `reply_via_chat` لا يعمل إلا إن أمكن إثبات هوية المحادثة المفتوحة (انظر 0.5)، وإلا يُرفض.
 
 #### حدود القرار
 
@@ -202,7 +215,7 @@ domain(whatsapp) {
 
 #### القرار: عملية منفصلة
 
-**عملية منفصلة**، ببروتوكول IPC صريح على Unix Domain Socket.
+ببروتوكول IPC صريح على Unix Domain Socket.
 
 ```text
 ┌──────────────────────────┐         ┌──────────────────────────┐
@@ -220,10 +233,12 @@ domain(whatsapp) {
 
 #### لماذا عملية منفصلة رغم التكلفة؟
 
-1. **لا تعطيل للاستجابة:** استدعاء LLM للتفكير قد يستغرق 5–30 ثانية. في نفس العملية، حتى مع asyncio، سيتنافس على CPU وذاكرة، وسيُبطئ استقبال أحداث Bridge.
+السبب الحاسم هو **العزل** لا حِمل المعالج: إن كان LLM خدمة بعيدة، فاستدعاؤه انتظار على الشبكة يتعامل معه asyncio دون تجميد الحلقة. أما إن شُغّل النموذج محلياً، فيصبح حِمل المعالج سبباً إضافياً.
+
+1. **عزل الأعطال والذاكرة:** إن تضخّم سياق LLM أو تسرّبت الذاكرة أو انهار Reflector، لا يسقط Main.
 2. **عزل الهلوسة:** إن هلوس Reflector وقرر حلقة لا نهائية، نُرسل له SIGKILL بدون التأثير على Main.
-3. **نمذجة ذهنية أنظف:** التفكير = عملية. التنفيذ = عملية. الحدود واضحة.
-4. **قابلية الملاحظة:** يمكن مراقبة Reflector بـ `strace` أو `py-spy` دون تشويش التنفيذ.
+3. **قابلية المراقبة والتحكم:** يمكن قياس استهلاكه وتحديد معدله ومراقبته بـ `strace` أو `py-spy` دون تشويش التنفيذ.
+4. **قابلية الاستبدال:** تبديل النموذج (محلي/سحابي) لا يمس العقل الرئيسي.
 
 #### بروتوكول IPC — Unix Domain Socket
 
@@ -244,58 +259,80 @@ Protocol:    JSONL (سطر = رسالة JSON)
 {"type": "plan_revision", "original_plan_id": "p1", "revised_plan": [...], "reason": "..."}
 ```
 
+الخطة المنقّحة لا تُنفَّذ مباشرة: تمر بنفس مسار أي خطة (0.4 ثم 0.5).
+
 **سياسة إعادة التشغيل:**
 
 - Main يراقب Reflector بـ Heartbeat كل 5 ثوانٍ.
 - فشل 3 مرات متتالية → Main ينتقل إلى **Degraded Mode**: تعطيل الميتا مؤقتاً، الاستمرار بالخطط HTN فقط.
 - هذا يضمن ألا يُسقط موت Reflector الوكيل كاملاً.
 
+#### قيد تشغيلي: Phantom Process Killer
+
+عملية Reflector المنفصلة هي بالضبط ما يستهدفه نظام "العمليات الشبحية" في أندرويد 12 وما بعده: العمليات الفرعية التي يُطلقها تطبيق (هنا Termux) تُحدّ بعدد إجمالي (32 افتراضياً لكل الجهاز)، وتُقتل إن استهلكت المعالج بإفراط في الخلفية.
+
+| الطريقة | الأمر / المكان | يصمد بعد إعادة التشغيل؟ | مدى الانتشار |
+| --- | --- | --- | --- |
+| رفع الحد عبر `device_config` | `adb shell device_config set_sync_disabled_for_tests persistent` ثم `adb shell device_config put activity_manager max_phantom_processes 2147483647` | نعم، **فقط** إن نُفّذ الأمر الأول قبله | أندرويد 12 فما فوق. يرفع حد العدد فقط ولا يوقف القتل بسبب استهلاك المعالج |
+| إيقاف المراقبة عبر `settings` | `adb shell settings put global settings_enable_monitor_phantom_procs false` | نعم | أندرويد 12L و13 فما فوق. يوقف المراقبة كلياً (العدد والمعالج) |
+| خيار المطوّر | خيارات المطوّر ← "تعطيل قيود العمليات الفرعية" (Disable child process restrictions) | نعم | أندرويد 14 فما فوق، وبعض إصدارات 12L/13 لدى بعض المصنّعين. يغيّر نفس علَم `settings` أعلاه |
+
+- يُحدَّد العمل بحسب **الطريقة المتاحة على الجهاز**، لا برقم الإصدار وحده؛ أداة الإعداد تفحص وجود كل طريقة قبل استخدامها.
+- بدون `set_sync_disabled_for_tests persistent`، يُعيد النظام ضبط `max_phantom_processes` عند مزامنة الإعدادات أو إعادة التشغيل؛ فيبدو كل شيء ناجحاً حتى أول إعادة تشغيل.
+
+> **تحذير:** هذه الإعدادات تُعطّل حماية وضعتها Google ضد العمليات الخبيثة أو المستنزفة للبطارية، على مستوى الجهاز كله لا للوكيل وحده. أي تثبيت يستخدمها **يجب** أن يمتلك Watchdog داخلياً يعوّضها: حدود استهلاك ذاتية للمعالج والذاكرة لكل عملية، وإعادة تشغيل Reflector عند موته، وانتقال إلى Degraded Mode عند تكرار القتل.
+
+إن نما هذا الجزء، يُنقل إلى قسم فرعي مستقل `0.7 Boundary Notes` بدل توسيع 0.3، ويُحال إليه من قسم Failure Modes (10).
+
 #### معايير القبول لـ 0.3
 
 - [ ] زمن استجابة Main لا يزيد عن 20% عند تشغيل Reflector (قياس مع/بدون).
 - [ ] SIGKILL على Reflector لا يُسقط Main.
 - [ ] Heartbeat يفشل 3 مرات → Degraded Mode خلال < 20 ثانية.
-- [ ] Reflector crash loops لا تُستهلك أكثر من 5% CPU.
+- [ ] Reflector crash loops لا تستهلك أكثر من 5% CPU.
+- [ ] بعد إعادة تشغيل الجهاز، يبقى إعداد Phantom Process المطبَّق نافذاً (يُتحقق منه آلياً عند الإقلاع).
 
 ---
 
 ### 0.4 المحلل الثابت للخطط (Static Plan Analyzer)
 
-**السؤال:** كيف نتأكد أن الخطة آمنة ومنطقية قبل تنفيذها؟
+**السؤال:** كيف نرفض الخطة الخاطئة قبل أن تصل إلى Bridge؟
 
 **المشكلة:** حتى مع HTN المقيّد، يمكن أن تُنتج خطة صحيحة نحوياً لكن كارثية دلالياً:
 
 - خطة ترسل 50 رسالة في 10 ثوانٍ (Rate Limit).
 - خطة تُرسل لشخص لم يراسله المستخدم من قبل (Social Risk).
-- خطة تحوي `set_text` ثم `tap` على زر "حذف" بدل "إرسال" (Semantic Risk).
+- خطة تحوي `a11y.set_text` ثم نقراً على زر "حذف" بدل "إرسال" (Semantic Risk).
 - خطة تكرر نفس الإجراء 30 مرة (Loop Detection).
 
-**القرار:** طبقة تحليل قبل التنفيذ، لا بعد الفشل.
+**القرار:** طبقة تحليل في Python قبل التنفيذ، لا بعد الفشل. وهي **بوابة جودة** لا بوابة أمان: القواعد 3 و6 و7 و8 تُفرض أيضاً في Bridge (0.5)، ونجاح الخطة هنا لا يعني قبولها هناك.
 
-#### المعايير السبعة للمحلل
+#### المعايير الثمانية للمحلل
 
-| # | المعيار | القاعدة | الإجراء عند الانتهاك |
-| --- | --- | --- | --- |
-| 1 | حد الطول | ≤ 15 إجراءً | رفض + طلب تبسيط |
-| 2 | حد التكرار | لا نفس (verb, target) أكثر من 3 مرات | رفض + تشخيص Loop |
-| 3 | حد المعدل | ≤ 5 إجراءات خطرة/دقيقة | تأجيل + إشعار |
-| 4 | الترتيب الدلالي | `set_text` قبل `tap(send)` إجباري | رفض |
-| 5 | تطابق السياق | كل `node_id` مذكور في آخر snapshot | رفض مع `STALE_PLAN` |
-| 6 | المخاطر الاجتماعية | إجراء لجهة اتصال جديدة يتطلب Key C | رفض بدون توقيع |
-| 7 | الحد المالي | أي إجراء مالي يحتاج حد صريح + Biometric | رفض |
+| # | المعيار | القاعدة | الإجراء عند الانتهاك | مفروض في Bridge أيضاً؟ |
+| --- | --- | --- | --- | --- |
+| 1 | حد الطول | ≤ 15 إجراءً | رفض + طلب تبسيط | لا |
+| 2 | حد التكرار | لا نفس (action, locator) أكثر من 3 مرات | رفض + تشخيص Loop | لا |
+| 3 | حد المعدل | ≤ 5 إجراءات أثرها `send_message`/دقيقة | تأجيل + إشعار | نعم |
+| 4 | الترتيب الدلالي | `a11y.set_text` قبل النقر على `send_button` إجباري | رفض | لا |
+| 5 | صحة المحددات | كل `locator` صحيح البنية، ومعرَّف في App Profile للتطبيق المستهدف، والخطوة الأولى تُحَل في آخر snapshot | رفض مع `INVALID_LOCATOR` | نعم (عند التنفيذ) |
+| 6 | المخاطر الاجتماعية | مستلم غير موجود في أي قائمة → طبقة T2 | رفض بدون توقيع C | نعم |
+| 7 | الحد المالي | أي نية مالية محظورة في هذا الإصدار | رفض | نعم |
+| 8 | حصر الأثر في النية | الخطة تعلن نية واحدة، وكل فئات الأثر الممكنة لإجراءاتها مسموحة لتلك النية | رفض مع `EFFECT_OUTSIDE_INTENT` | نعم |
 
 #### مخطط المحلل
 
 ```python
-def analyze(plan: List[Action], context: Context) -> AnalysisResult:
+def analyze(plan: Plan, context: Context) -> AnalysisResult:
     checks = [
-        check_length_limit,      # ≤ 15
-        check_repetition,        # لا حلقة
-        check_rate_limit,        # ≤ 5 dangerous/min
-        check_semantic_order,    # نص قبل إرسال
-        check_context_freshness, # لا node_id قديم
-        check_social_risk,       # جديد ⇒ Key C
-        check_financial_risk,    # مالي ⇒ Biometric
+        check_length_limit,       # ≤ 15
+        check_repetition,         # لا حلقة
+        check_rate_limit,         # ≤ 5 send_message/min
+        check_semantic_order,     # نص قبل إرسال
+        check_locators,           # محددات صحيحة ومعرَّفة
+        check_social_risk,        # مستلم مجهول ⇒ T2
+        check_financial_risk,     # مالي ⇒ محظور
+        check_effects_in_intent,  # الأثر ⊆ النية
     ]
     for check in checks:
         result = check(plan, context)
@@ -311,12 +348,12 @@ def analyze(plan: List[Action], context: Context) -> AnalysisResult:
 خطة LLM تُنتج:
 
 ```text
-tap(node_A), observe, tap(node_A), observe, tap(node_A), observe, ...
+a11y.click(L_A), a11y.observe, a11y.click(L_A), a11y.observe, a11y.click(L_A), a11y.observe, ...
 ```
 
 المحلل:
 
-- `check_repetition` يكتشف `tap(node_A)` تكرر 3 مرات → رفض.
+- `check_repetition` يكتشف `a11y.click(L_A)` تكرر 3 مرات → رفض.
 - السبب يُرسل لـ Reflector: "خطة فيها حلقة، المهمة تتطلب إعادة تخطيط".
 - Reflector يستدعي LLM بصيغة "الخطة السابقة فشلت بسبب X، اقترح بديلاً".
 
@@ -331,13 +368,152 @@ tap(node_A), observe, tap(node_A), observe, tap(node_A), observe, ...
 
 ---
 
+### 0.5 النية والمحددات والرد الطبقي (Intent, Locators & Tiered Reply) — للمراجعة
+
+**المشكلة:** تصنيف الخطر حسب اسم الإجراء قابل للالتفاف (إرسال رسالة عبر `set_text` + `click` بدل `notif.reply`)، والخطط التي تحمل `node_id` تنكسر بعد أول خطوة لأن `state_version` يتغيّر. و`declared_intent` الذي يعلنه Python وحده لا قيمة أمنية له، لأن Python غير موثوق.
+
+**القرار:** Bridge هو من يُصدر النية ويفرضها ويصنّف الأثر ويثبت هوية المستلم. Python يطلب فقط.
+
+#### 0.5.1 مفردات النيات (Closed Set)
+
+مستوى الخطر وفئات الأثر المسموحة لكل نية مُعرَّفة في Bridge، لا في Python.
+
+| النية | المعاملات | فئات الأثر المسموحة | الخطر |
+| --- | --- | --- | --- |
+| `read_notification` | `notification_key` | `none` | LOW |
+| `dismiss_notification` | `notification_key` | `none`، `dismiss` | LOW |
+| `navigate` | `package` أو `uri` | `none`، `navigate` | LOW |
+| `auto_reply` | `recipient`، `template_id` | `none`، `navigate`، `send_message` (نص القالب فقط) | LOW (T0) |
+| `reply_to` | `recipient`، `text` | `none`، `navigate`، `prefill`، `ui_input`، `send_message` (للمستلم نفسه فقط) | MEDIUM |
+| `send_money` | — | — | CRITICAL: **محظورة في هذا الإصدار** |
+
+#### 0.5.2 دورة حياة `plan_token`
+
+`plan_token` يُصدره Bridge، لا Python. لو أصدره Python لاستطاع توليد token جديد لكل إجراء والالتفاف على تثبيت النية.
+
+```text
+Python                                   Bridge
+  │                                         │
+  │── plan.begin {intent, intent_params} ──►│  1. النية في المفردات؟
+  │                                         │  2. هوية المستلم مثبتة؟ (0.5.5)
+  │                                         │  3. الطبقة T0/T1/T2 (0.5.6)
+  │                                         │  4. Human Presence + Rate Limits
+  │◄── {plan_token, tier, expires_at} ──────│  5. token: UUID، صالح 60 ثانية، نية واحدة
+  │                                         │
+  │── action {…, plan_token} ──────────────►│  لكل إجراء: الأثر ⊆ نية الـ token؟
+  │◄── ack / reject ────────────────────────│
+  │                ...                      │
+  │── plan.end {plan_token} ───────────────►│  إبطال الـ token
+```
+
+- الـ token يُبطَل عند `plan.end`، أو انتهاء المدة، أو أول رفض أمني، أو انتقال Human Presence إلى LOCKED.
+- لا يُجدَّد الـ token. إن احتاجت الخطة وقتاً أطول، تطلب Python token جديداً، فتُعاد كل الفحوصات.
+- إجراء بدون token صالح يُرفض، باستثناء `a11y.observe` و`local.*`.
+
+#### 0.5.3 المحددات (Locators)
+
+كل خطوة تفاعلية تحمل محدداً دلالياً، لا `node_id`:
+
+```json
+[
+  { "role": "send_button", "scope": "current_conversation" },
+  { "text": "Send", "type": "button" },
+  { "resource_id": "com.whatsapp:id/send" }
+]
+```
+
+- Bridge يحوّل المحدد إلى عنصر لحظة التنفيذ، مقابل أحدث snapshot.
+- المحدد يجب أن يُحَل إلى عنصر **واحد بالضبط**: صفر عناصر → `LOCATOR_NOT_FOUND`، أكثر من عنصر → `LOCATOR_AMBIGUOUS`.
+- Python لا يخزّن `node_id` عبر الخطوات. نقطة.
+- `lock_version` على مستوى الخطوة: هو إصدار الـ snapshot الذي بنى عليه Python قراره. Bridge يرفض الخطوة (`STALE_SCREEN`) إن تغيّر `screen_id` منذ ذلك الإصدار، ويقبل التغيّرات داخل نفس الشاشة لأن المحدد يُحَل من جديد. هذا يُبقي روح قاعدة Fail-fast في الطبقة الأولى دون أن يكسر الخطط متعددة الخطوات.
+
+#### 0.5.4 جدول App Profiles
+
+"أثر غير مصنّف" لا معنى له بدون مرجع ثابت. لذلك يحمل Bridge جدول App Profiles:
+
+- قائمة الحزم التي تُعدّ تطبيقات مراسلة (`com.whatsapp`، …).
+- لكل تطبيق: تعريف الأدوار (`send_button`، `message_input`، `conversation_header`، …) بـ `resource_id` وبنية الشاشة، وفئة الأثر لكل دور.
+- يُحدَّث مع إصدارات Bridge فقط، لا ديناميكياً ولا من Python.
+
+**قاعدة التصنيف:** Bridge يصنّف أثر كل إجراء بعد حل محدده. العنصر غير الموجود في الـ Profile داخل تطبيق مراسلة يُعامل بأخطر فئة أثر في ذلك التطبيق (`send_message`)، لا بأقلها. والنقر في تطبيق غير موجود في الجدول مسموح فقط تحت نية `navigate`.
+
+#### 0.5.5 إثبات هوية المستلم
+
+`reply_to(Ahmed)` لا تكفي أن يكون الأثر "إرسال"؛ يجب أن يكون الإرسال إلى أحمد. ولا يُتحقق من ذلك بمطابقة نص عنوان المحادثة: الألقاب والرموز والمحادثات الجماعية تكسر ذلك.
+
+- `recipient` يُعطى كـ contact URI أو رقم هاتف بصيغة E.164، ويُحَل عبر Contacts Provider.
+- الإثبات بحسب القناة:
+
+| القناة | كيف تُثبت الهوية | الحكم |
+| --- | --- | --- |
+| `notif.reply` | بيانات الإشعار (`Person` في MessagingStyle / shortcut) تُطابَق عبر Contacts Provider | مثبتة إن تطابقت |
+| `intent.open_deep_link` برقم الهاتف ثم الإرسال | المحادثة فُتحت بالرقم نفسه تحت نفس الـ token، ولم يتغيّر `screen_id` بعدها | مثبتة بالبناء |
+| محادثة مفتوحة مسبقاً عبر الواجهة فقط | لا توجد وسيلة موثوقة | **رفض** |
+| محادثة جماعية | — | **رفض** في هذا الإصدار |
+
+إن لم يمكن تأكيد الهوية → رفض (`RECIPIENT_UNVERIFIED`).
+
+#### 0.5.6 نموذج الرد الطبقي (T0 / T1 / T2)
+
+| الطبقة | الشرط | التوقيع | مثال |
+| --- | --- | --- | --- |
+| T0 — رد آلي بقوالب | نية `auto_reply` + الجهة في Auto-Reply List | لا يحتاج Key C | "سأرد عليك قريباً" |
+| T1 — رد كامل بجلسة تفويض | نية `reply_to` + الجهة في Trusted List + جلسة تفويض فعّالة | Key C مرة واحدة عند فتح الجلسة، صالحة 4 ساعات | رد على الزوج/الزوجة أثناء النوم |
+| T2 — رد لكل رسالة | أي حالة أخرى | Key C لكل رسالة | رد على مدير |
+
+**قيود إلزامية:**
+
+- قوالب T0 يُحرّرها المستخدم في Bridge App فقط. نية `auto_reply` تحمل `template_id` لا نصاً، وBridge يجلب النص من قوالبه. Python يختار ولا يولّد — بنية العقد نفسها، لا بالاعتماد على حسن سلوك المُخطِّط.
+- جلسة T1 تنتهي تلقائياً عند: انتهاء المدة، أو تغيير الشبكة، أو Human Presence = LOCKED لأكثر من دقيقة.
+- القائمتان (Auto-Reply وTrusted) تُعدَّلان بمصادقة بيومترية فقط، وتُخزَّنان في Bridge (محميتين بـ Keystore)، لا في Termux.
+- كل قرار T0/T1/T2 يُسجَّل في Action Journal مع سبب التصنيف.
+- الطبقات تعمل داخل أوضاع التزامن في الطبقة الأولى لا فوقها: في وضع LOCKED تُجمَّد كل الإجراءات أياً كانت الطبقة.
+
+#### معايير القبول لـ 0.5
+
+- [ ] 20 خطة واجهة من 5 خطوات على شاشات متغيرة → ≥ 95% إتمام صحيح دون فشل بسبب "عنصر قديم".
+- [ ] خطة نيتها `read_notification` تحاول النقر على `send_button` → رفض في Bridge (`EFFECT_OUTSIDE_INTENT`) حتى لو تجاوزت المحلل في Python.
+- [ ] إجراء يحمل `plan_token` منتهياً أو مزوّراً أو من نية أخرى → رفض.
+- [ ] `reply_to(A)` بعد انتقال الواجهة إلى محادثة B → رفض (`STALE_SCREEN` أو `RECIPIENT_UNVERIFIED`).
+- [ ] `auto_reply` يحمل نصاً حراً بدل `template_id` → رفض.
+- [ ] جلسة T1 تنتهي فعلاً عند كل واحد من شروط الانتهاء الثلاثة.
+
+---
+
+### 0.6 تسلسل المفاتيح (Key Hierarchy) — للمراجعة
+
+| المفتاح | الدور | مكان التخزين | الاشتقاق | الدوران |
+| --- | --- | --- | --- | --- |
+| **A** (Master) | جذر الثقة: يُشتق منه B، ويُوقّع حالة Bridge الحساسة | Android Keystore داخل Bridge (StrongBox إن توفر)، غير قابل للتصدير | يُولَّد مرة واحدة داخل Keystore | فقط عند الاشتباه باختراق. دورانه يُبطل B وكل جلسات T1 ويستلزم إعادة الاقتران |
+| **B** (Session) | توقيع HMAC لكل طلب من Python إلى Bridge | المفتاح الوحيد في Termux | يُشتق من A داخل Bridge عند كل اقتران | عند كل اقتران، وكل 24 ساعة، وعند LOCKED مطوّل |
+| **C** (Critical) | موافقة المستخدم: توقيع T2 لكل رسالة، وفتح جلسة T1، وتعديل القوائم | Android Keystore داخل Bridge، يُستخدم عبر alias فقط | يُولَّد مرة واحدة داخل Keystore بشرط مصادقة المستخدم لكل استخدام | لا يغادر العتاد الآمن أبداً، ولا توجد له قيمة خارج Keystore |
+
+**نموذج التهديد المترتب:**
+
+- اختراق Termux بالكامل يعني امتلاك B فقط. أقصى ما يفعله المهاجم: ما تسمح به طبقة T0، وجلسة T1 إن كانت فعّالة. لا يستطيع إصدار `plan_token` لنية غير مسموحة، ولا تزوير C، ولا تعديل القوائم.
+- C لا يُوقّع إلا داخل Bridge بعد BiometricPrompt؛ Python لا يرى C ولا ناتج توقيعه بشكل يمكن إعادة استخدامه.
+
+**سؤال مفتوح:** آلية الاقتران الأولى (كيف يصل B إلى Termux أول مرة بشكل آمن) — مثلاً رمز لمرة واحدة يُعرض في Bridge ويُدخَل في Termux. يُحسم في Section 2 (Bridge Client).
+
+> **TODO (الطبقة الأولى):** وحدة Safety Gate في الطبقة الأولى تذكر HMAC فقط. يجب ربطها بهذا التسلسل في PR توحيد العقد.
+
+#### معايير القبول لـ 0.6
+
+- [ ] لا يظهر A أو C في أي ملف أو سجل أو ذاكرة خارج Bridge (فحص آلي للـ Journal وملفات Termux).
+- [ ] طلب موقّع بـ B منتهي الصلاحية (بعد الدوران) → رفض.
+- [ ] تعديل Auto-Reply List أو Trusted List بدون مصادقة بيومترية → مستحيل من Python ومن واجهة Bridge.
+
+---
+
 ### ملخص Section 0
 
 | # | القرار | الحالة |
 | --- | --- | --- |
-| 0.1 | مفردات إجراءات مغلقة (~15 verb) | ✅ مُثبَّت |
-| 0.2 | Planner هجين: HTN أولاً، LLM fallback | ✅ مُثبَّت |
-| 0.3 | Meta-Loop في عملية منفصلة عبر UDS | ✅ مُثبَّت |
-| 0.4 | محلل ثابت للخطط قبل التنفيذ | ✅ مُثبَّت |
+| 0.1 | مفردات إجراءات مغلقة (14 إجراءً، `channel.action`) وعقد بيانات موحّد | ✅ مُثبَّت |
+| 0.2 | Planner هجين: HTN (GTPyhop) أولاً، LLM fallback | ✅ مُثبَّت |
+| 0.3 | Meta-Loop في عملية منفصلة عبر UDS، مع قيد Phantom Process | ✅ مُثبَّت |
+| 0.4 | محلل ثابت للخطط في Python كبوابة جودة | ✅ مُثبَّت |
+| 0.5 | النية والمحددات والرد الطبقي، مفروضة في Bridge عبر `plan_token` | 🟡 للمراجعة |
+| 0.6 | تسلسل المفاتيح A/B/C | 🟡 للمراجعة |
 
 **التزام صريح:** أي تعديل على أحد هذه القرارات بعد Sprint 2 يستوجب RFC مكتوب يُراجع في PR منفصل. هذا ليس إجراءً شكلياً — هي حماية من الانحلال المعماري (Architectural Drift).
