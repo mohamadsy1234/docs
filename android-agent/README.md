@@ -13,6 +13,7 @@
 
 - [`agent/agent.py`](agent/agent.py): هيكل Python Agent لـ Sprint 0 (عقد التشغيل في Section 1).
 - الاختبارات: `python3 -m unittest discover -s android-agent/agent/tests -v`
+- [دليل اختبار Sprint 0 على Termux](agent/TERMUX-RUNBOOK.md)، مع أداة القياس [`agent/tools/soak.py`](agent/tools/soak.py).
 
 ## أعمال معلّقة
 

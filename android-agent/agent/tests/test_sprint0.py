@@ -152,6 +152,22 @@ class LifecycleTests(AgentTestCase):
         self.assertEqual(p.wait(timeout=15), 5)
         self.assertIn("HANG", self.events())
 
+    def test_process_freeze_is_not_a_hang(self):
+        # Simulates the Android cgroup freezer: the whole process stops, then resumes.
+        self.write_config(f"port = {self.port}\nheartbeat_interval = 0.5\nwatchdog_timeout = 2.0\n")
+        for _ in range(10):
+            p = self.start_agent()
+            self.wait_for_event("listening")
+            p.send_signal(signal.SIGSTOP)
+            time.sleep(3.0)
+            p.send_signal(signal.SIGCONT)
+            time.sleep(1.5)
+            self.assertIsNone(p.poll(), "false HANG after a freeze")
+            p.send_signal(signal.SIGTERM)
+            self.assertEqual(p.wait(timeout=10), 0)
+        self.assertNotIn("HANG", self.events())
+        self.assertIn("process_resumed", self.events())
+
     def test_journal_is_valid_jsonl(self):
         p = self.start_agent()
         self.wait_for_event("listening")

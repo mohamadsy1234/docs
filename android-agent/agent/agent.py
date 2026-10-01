@@ -163,13 +163,29 @@ class Heartbeat:
         return time.monotonic() - self._last
 
 
+WATCHDOG_TICK = 1.0
+# A tick that overruns by this much means the whole process was frozen
+# (Android cgroup freezer, SIGSTOP), not that the event loop hung.
+SUSPEND_GAP = 1.0
+
+
 def start_watchdog(heartbeat: Heartbeat, journal: Journal, timeout: float,
                    stop: threading.Event) -> threading.Thread:
     def run() -> None:
-        while not stop.wait(1.0):
-            age = heartbeat.age()
-            if age > timeout:
-                journal.write("HANG", level="critical", seconds_without_heartbeat=round(age, 1))
+        last_tick = resumed_at = time.monotonic()
+        while not stop.wait(WATCHDOG_TICK):
+            now = time.monotonic()
+            gap = now - last_tick
+            last_tick = now
+            if gap > WATCHDOG_TICK + SUSPEND_GAP:
+                # Both threads were frozen; the stale heartbeat says nothing
+                # about the loop. Give it a full timeout from the resume.
+                resumed_at = now
+                journal.write("process_resumed", level="warning", frozen_seconds=round(gap, 1))
+            silent = min(heartbeat.age(), now - resumed_at)
+            if silent > timeout:
+                journal.write("HANG", level="critical",
+                              seconds_without_heartbeat=round(heartbeat.age(), 1))
                 os._exit(EXIT_HANG)
 
     thread = threading.Thread(target=run, name="hang-watchdog", daemon=True)
