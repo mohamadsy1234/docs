@@ -4,8 +4,8 @@ Python Agent Brain - Sprint 0 (Skeleton)
 
 Implements the runtime contract in Section 1 of 02-python-agent-brain.md:
 startup sequence, exit codes, signals, the JSONL journal, the hang watchdog
-thread and `agent --check`. The WebSocket protocol arrives in Sprint 1
-(mvp-1-spec.md); until then the port is held by a placeholder listener.
+thread and `agent --check`. Sprint 1 adds the WebSocket link with the
+Bridge (bridge_link.py, protocol.py; mvp-1-spec.md section 2).
 """
 
 import argparse
@@ -41,6 +41,8 @@ DEFAULTS: Dict[str, Any] = {
     "heartbeat_interval": 5.0,
     "watchdog_timeout": 30.0,
     "drain_timeout": 5.0,
+    "handshake_timeout": 5.0,
+    "dummy_reply_delay": 0.0,
 }
 
 # Test hook for the 1.4 acceptance criterion: block the event loop after N
@@ -194,13 +196,12 @@ def start_watchdog(heartbeat: Heartbeat, journal: Journal, timeout: float,
 
 
 # --- Async runtime ---
-async def placeholder_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-    # Sprint 1 replaces this with the websockets server and mutual handshake.
-    writer.close()
-
-
 async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Connection,
-                    heartbeat: Heartbeat) -> int:
+                    heartbeat: Heartbeat, secret: bytes) -> int:
+    from websockets.asyncio.server import serve
+
+    from bridge_link import BridgeLink
+
     loop = asyncio.get_running_loop()
     stop = asyncio.Event()
     received: Dict[str, Optional[int]] = {"signal": None}
@@ -224,7 +225,8 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
 
     # Step 6: bind the real listening socket; failure means exit 2.
     try:
-        server = await asyncio.start_server(placeholder_client, HOST, config["port"])
+        link = BridgeLink(secret, config, journal)
+        server = await serve(link.handle, HOST, config["port"], max_size=64 * 1024)
     except OSError as e:
         journal.write("port_bind_failed", level="error", port=config["port"], reason=str(e),
                       note="port taken: possible squatting by another app (mvp-1-spec 2.2)")
@@ -244,8 +246,11 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
                 pass
 
     async def serve_task() -> None:
-        async with server:
+        try:
             await stop.wait()
+        finally:
+            server.close()  # closes open sessions with 1001 (going away)
+            await server.wait_closed()
 
     # Step 7: one TaskGroup for the main loop.
     async with asyncio.TaskGroup() as tg:
@@ -265,6 +270,12 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
 # --- agent --check (Section 1.5) ---
 def check_environment() -> Dict[str, bool]:
     results = {"python_ok": sys.version_info >= MIN_PYTHON}
+
+    try:
+        import websockets  # noqa: F401
+        results["websockets_ok"] = True
+    except ImportError:
+        results["websockets_ok"] = False
 
     try:
         load_secret()
@@ -332,12 +343,12 @@ def main() -> int:
     stop_watchdog = threading.Event()
     try:
         # Steps 3 and 4: secret, then SQLite.
-        load_secret()
+        secret = load_secret()
         memory = open_memory()
 
         heartbeat = Heartbeat()
         start_watchdog(heartbeat, journal, config["watchdog_timeout"], stop_watchdog)
-        return asyncio.run(run_agent(config, journal, memory, heartbeat))
+        return asyncio.run(run_agent(config, journal, memory, heartbeat, secret))
     except StartupError as e:
         journal.write("startup_failed", level="error", code=e.code, reason=str(e))
         return e.code

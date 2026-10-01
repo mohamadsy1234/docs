@@ -713,6 +713,7 @@ Python                                   Bridge
 | 3 | `API_SECRET` مفقود أو تالف أو بصلاحيات خاطئة |
 | 4 | فشل فتح SQLite |
 | 5 | `HANG`: تجمّد حلقة الأحداث (1.4) |
+| 70 | انهيار غير متوقع (`EX_SOFTWARE`) |
 | 130 | `SIGINT` |
 
 #### معيار قبول 1.2
@@ -794,7 +795,7 @@ Python                                   Bridge
 
 أداة إلزامية تقيس بوابات القبول. عقدها:
 
-- **الخرج:** أسطر `key=value` قابلة للقراءة الآلية: `python_ok`، `secret_ok`، `sqlite_ok`، `port_free`.
+- **الخرج:** أسطر `key=value` قابلة للقراءة الآلية: `python_ok`، `websockets_ok`، `secret_ok`، `sqlite_ok`، `port_free`.
 - **رمز الخروج:** 0 فقط إن نجحت كل الفحوصات.
 - **بلا آثار جانبية:** لا يقبل اتصالاً، ولا يرسل رسالة، ولا يكتب في Memory. فحص المنفذ يحجزه ثم يُحرّره فوراً.
 
@@ -805,7 +806,7 @@ Python                                   Bridge
 قبل بدء Sprint 1 (mvp-1-spec، 6)، يجب تحقق كل ما يلي:
 
 - [ ] Python `>= 3.11` مؤكَّد في Termux.
-- [ ] `agent --check` يطبع `python_ok=true` و`secret_ok=true` و`sqlite_ok=true` و`port_free=true`، ويخرج بـ 0.
+- [ ] `agent --check` يطبع `python_ok=true` و`websockets_ok=true` و`secret_ok=true` و`sqlite_ok=true` و`port_free=true`، ويخرج بـ 0.
 - [ ] دورة حياة كاملة: بدء → `SIGTERM` → خروج 0 خلال < 6s.
 - [ ] 30 دقيقة تشغيل دون تحذيرات asyncio.
 - [ ] Watchdog يكتشف تعليق حلقة الأحداث ويخرج برمز 5.

@@ -80,7 +80,8 @@ class CheckTests(AgentTestCase):
         r = self.run_agent("--check")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertEqual(r.stdout.splitlines(),
-                         ["python_ok=true", "secret_ok=true", "sqlite_ok=true", "port_free=true"])
+                         ["python_ok=true", "websockets_ok=true", "secret_ok=true",
+                          "sqlite_ok=true", "port_free=true"])
 
     def test_missing_secret_fails(self):
         (self.config_dir / ".env").unlink()

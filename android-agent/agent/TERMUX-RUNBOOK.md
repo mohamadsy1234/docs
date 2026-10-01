@@ -16,6 +16,7 @@
 ```bash
 pkg update && pkg upgrade -y
 pkg install -y python git
+pip install websockets
 
 # المستودع كبير (نسخة من GitHub Docs): نجلب مجلد الوكيل فقط
 git clone --depth 1 --filter=blob:none --sparse \
@@ -47,13 +48,21 @@ python3 --version
 python3 agent.py --check; echo "exit=$?"
 ```
 
-المتوقع: أربعة أسطر كلها `true`، و`exit=0`.
+المتوقع: خمسة أسطر كلها `true`، و`exit=0`.
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-المتوقع: 13 اختباراً ناجحاً (قرابة دقيقة). اختبار التجميد (`test_process_freeze_is_not_a_hang`) مهم هنا تحديداً، لأنه يحاكي ما يفعله أندرويد بالعمليات في الخلفية.
+المتوقع: 28 اختباراً ناجحاً (قرابة دقيقة): 13 لـ Sprint 0 و15 لـ Sprint 1. اختبار التجميد (`test_process_freeze_is_not_a_hang`) مهم هنا تحديداً، لأنه يحاكي ما يفعله أندرويد بالعمليات في الخلفية.
+
+**جولة كاملة يدوية (Sprint 1):** في نافذة Termux أولى شغّل `python3 agent.py`، وفي نافذة ثانية:
+
+```bash
+python3 tools/fake_bridge.py --port 8000
+```
+
+المتوقع: `handshake ok`، ثم اقتراح الرد، ثم `round trip ok`.
 
 ---
 

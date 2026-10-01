@@ -12,6 +12,7 @@
 ## الشيفرة
 
 - [`agent/agent.py`](agent/agent.py): هيكل Python Agent لـ Sprint 0 (عقد التشغيل في Section 1).
+- [`agent/protocol.py`](agent/protocol.py) و[`agent/bridge_link.py`](agent/bridge_link.py): بروتوكول Sprint 1 (المصافحة المتبادلة والقناة الموقّعة)، و[`agent/tools/fake_bridge.py`](agent/tools/fake_bridge.py) عميل Bridge وهمي للاختبار.
 - الاختبارات: `python3 -m unittest discover -s android-agent/agent/tests -v`
 - [دليل اختبار Sprint 0 على Termux](agent/TERMUX-RUNBOOK.md)، مع أداة القياس [`agent/tools/soak.py`](agent/tools/soak.py).
 
