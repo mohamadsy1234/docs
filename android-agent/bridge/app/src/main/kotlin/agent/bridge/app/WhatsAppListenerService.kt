@@ -32,13 +32,14 @@ class WhatsAppListenerService : NotificationListenerService() {
             transport = { message -> bridgeClient?.send(message) ?: false },
             ui = AndroidShadowUi(ctx),
             sender = NotificationReplySender(ctx),
-            audit = AuditLogFile(ctx),
+            audit = StatsAuditLog(AuditLogFile(ctx), AgentBridge.stats),
             hasConsent = { prefs.consent },
         )
         bridgeClient = BridgeClient("ws://127.0.0.1:${prefs.port}", SecretStore(ctx).getOrCreate(), bridgeCore)
         core = bridgeCore
         client = bridgeClient
         AgentBridge.core = bridgeCore
+        AgentBridge.stats.listenerBound = true
         bridgeClient.start()
         handler.postDelayed(sweep, SWEEP_INTERVAL_MS)
     }
@@ -49,6 +50,8 @@ class WhatsAppListenerService : NotificationListenerService() {
         client = null
         core = null
         AgentBridge.core = null
+        AgentBridge.stats.listenerBound = false
+        AgentBridge.stats.agentConnected = false
         requestRebind(ComponentName(this, WhatsAppListenerService::class.java))
     }
 

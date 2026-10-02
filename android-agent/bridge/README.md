@@ -13,6 +13,8 @@
 
 ## البناء
 
+**الطريقة الأسهل:** سير العمل [NEXUS Bridge APK](https://github.com/mohamadsy1234/docs/actions/workflows/nexus-bridge-apk.yml) على GitHub يشغّل كل الاختبارات ثم يبني `app-debug.apk` مع كل تعديل في `android-agent/`، ويرفقه بالتشغيل في قسم Artifacts. يحتاج تفعيل Actions في المستودع مرة واحدة (تبويب Actions).
+
 **`core` وحدها** (لا تحتاج Android SDK):
 
 ```bash

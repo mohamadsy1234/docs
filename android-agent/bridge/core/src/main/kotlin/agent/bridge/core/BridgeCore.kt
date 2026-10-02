@@ -78,6 +78,7 @@ class BridgeCore<H>(
         if (sent) {
             // Only a delivered event counts as seen, so a re-post after a reconnect is retried.
             synchronized(sentEvents) { sentEvents[eventId] = Unit }
+            audit.record("forwarded", mapOf("token" to reg.token, "sender" to n.senderName))
         } else {
             store.take(reg.token)
             audit.record("dropped_offline", mapOf("sbn_key" to n.sbnKey))

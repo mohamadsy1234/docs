@@ -33,6 +33,7 @@ class AndroidShadowUi(private val context: Context) : ShadowUi {
 
         val notification = Notification.Builder(context, CH_SHADOW)
             .setSmallIcon(android.R.drawable.sym_action_chat)
+            .setColor(0xFF00F0FF.toInt()) // NEXUS cyan accent
             .setContentTitle(context.getString(R.string.shadow_title, senderName))
             .setContentText(proposedText)
             .setStyle(Notification.BigTextStyle().bigText(proposedText))

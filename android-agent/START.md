@@ -26,7 +26,7 @@ cd agent-repo && git sparse-checkout set android-agent
 
 ## 2. تطبيق Agent Bridge (مرة واحدة)
 
-1. ابنِه من مجلد `android-agent/bridge` في Android Studio (التفاصيل في [bridge/README.md](bridge/README.md)) وثبّته.
+1. نزّل ملف `app-debug.apk` من آخر تشغيل ناجح لـ [NEXUS Bridge APK](https://github.com/mohamadsy1234/docs/actions/workflows/nexus-bridge-apk.yml) (قسم Artifacts)، وثبّته على الهاتف بالسماح بالتثبيت من مصادر غير معروفة. أو ابنِه بنفسك من `android-agent/bridge` في Android Studio ([bridge/README.md](bridge/README.md)).
 2. افتحه وانقر **نسخ** لنسخ المفتاح السري.
 3. في Termux:
 

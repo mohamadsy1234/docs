@@ -1,0 +1,47 @@
+# Builds the NEXUS Bridge Android app (android-agent/bridge) after running
+# the agent's Python tests and the Kotlin core tests (including interop with
+# the real Python agent). The debug APK is attached to the run as an artifact.
+name: NEXUS Bridge APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android-agent/**'
+      - '.github/workflows/nexus-bridge-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Agent tests (Python)
+        run: |
+          pip install websockets
+          python -m unittest discover -s android-agent/agent/tests -v
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Core tests and APK
+        working-directory: android-agent/bridge
+        run: ./gradlew -Pandroid=true :core:test :app:assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-bridge-debug-apk
+          path: android-agent/bridge/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
