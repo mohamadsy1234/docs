@@ -32,6 +32,19 @@ FIELDS = {
 }
 
 
+class _NoStats:
+    """Stand-in when no dashboard stats are attached."""
+
+    paused = False
+
+    def __init__(self) -> None:
+        from collections import Counter
+        self.counters = Counter()
+
+    def __getattr__(self, name: str) -> Callable[..., None]:
+        return lambda *args, **kwargs: None
+
+
 def _check_fields(message: Dict[str, Any]) -> None:
     for name in FIELDS[message["type"]]:
         value = message.get(name)
@@ -40,10 +53,11 @@ def _check_fields(message: Dict[str, Any]) -> None:
 
 
 class BridgeLink:
-    def __init__(self, secret: bytes, config: Dict[str, Any], journal: Any):
+    def __init__(self, secret: bytes, config: Dict[str, Any], journal: Any, stats: Any = None):
         self._secret = secret
         self._config = config
         self._journal = journal
+        self._stats = stats if stats is not None else _NoStats()
         self._current: Optional[ServerConnection] = None
         self._seen: "OrderedDict[str, None]" = OrderedDict()
 
@@ -55,6 +69,7 @@ class BridgeLink:
         except (ProtocolError, TimeoutError) as e:
             self._journal.write("handshake_failed", level="warning", peer=str(peer),
                                 reason=str(e) or type(e).__name__)
+            self._stats.counters["handshake_failed"] += 1
             await ws.close(CLOSE_POLICY, "handshake failed")
             return
         except ConnectionClosed:
@@ -66,11 +81,13 @@ class BridgeLink:
             await self._current.close(CLOSE_SUPERSEDED, "superseded")
         self._current = ws
         self._journal.write("session_opened", peer=str(peer))
+        self._stats.session_opened(str(peer))
         try:
             await self._serve(ws, protocol.server_channel(key))
         finally:
             if self._current is ws:
                 self._current = None
+                self._stats.session_closed()
             self._journal.write("session_closed", peer=str(peer))
 
     async def _handshake(self, ws: ServerConnection) -> bytes:
@@ -95,6 +112,7 @@ class BridgeLink:
         except* ProtocolError as group:
             self._journal.write("protocol_violation", level="warning",
                                 reason=str(group.exceptions[0]))
+            self._stats.counters["protocol_violation"] += 1
             await ws.close(CLOSE_POLICY, "protocol violation")
         except* ConnectionClosed:
             pass
@@ -112,6 +130,7 @@ class BridgeLink:
             event_id = message["event_id"]
             if event_id in self._seen:
                 self._journal.write("incoming_duplicate", event_id=event_id)
+                self._stats.counters["duplicates"] += 1
                 return
             self._seen[event_id] = None
             if len(self._seen) > SEEN_EVENTS:
@@ -119,13 +138,24 @@ class BridgeLink:
             # Message text stays out of the journal; only its size is recorded.
             self._journal.write("incoming", event_id=event_id, reply_token=token,
                                 text_length=len(message["text"]))
+            self._stats.incoming(token, message["sender_name"], message["text"])
+            if self._stats.paused:
+                # Emergency pause (dashboard kill switch): listen, propose nothing.
+                self._journal.write("proposal_withheld", reply_token=token, reason="paused")
+                return
             # Each proposal runs on its own task, so a slow LLM call for one
             # sender never delays the next incoming message (1.3).
             tg.create_task(self._propose(token, send))
         else:
             self._journal.write(kind, reply_token=token)
+            self._stats.resolved(token, {"notification_sent": "sent", "proposal_ignored": "ignored",
+                                         "notification_expired": "expired"}[kind])
 
     async def _propose(self, token: str, send: Callable[[Dict[str, Any]], Any]) -> None:
         await asyncio.sleep(self._config["dummy_reply_delay"])
+        if self._stats.paused:  # paused while this proposal was being prepared
+            self._journal.write("proposal_withheld", reply_token=token, reason="paused")
+            return
         await send({"type": "propose_reply", "reply_token": token, "proposed_text": DUMMY_REPLY})
         self._journal.write("proposal_sent", reply_token=token)
+        self._stats.proposal_sent(token, DUMMY_REPLY)

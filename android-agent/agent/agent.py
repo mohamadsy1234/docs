@@ -43,6 +43,7 @@ DEFAULTS: Dict[str, Any] = {
     "drain_timeout": 5.0,
     "handshake_timeout": 5.0,
     "dummy_reply_delay": 0.0,
+    "dashboard_port": 8001,  # 0 disables the local dashboard
 }
 
 # Test hook for the 1.4 acceptance criterion: block the event loop after N
@@ -201,6 +202,8 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
     from websockets.asyncio.server import serve
 
     from bridge_link import BridgeLink
+    from dashboard import Dashboard, make_token, write_url_file
+    from stats import AgentStats
 
     loop = asyncio.get_running_loop()
     stop = asyncio.Event()
@@ -225,13 +228,29 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
 
     # Step 6: bind the real listening socket; failure means exit 2.
     try:
-        link = BridgeLink(secret, config, journal)
+        stats = AgentStats(state_dir() / "paused")
+        link = BridgeLink(secret, config, journal, stats)
         server = await serve(link.handle, HOST, config["port"], max_size=64 * 1024)
     except OSError as e:
         journal.write("port_bind_failed", level="error", port=config["port"], reason=str(e),
                       note="port taken: possible squatting by another app (mvp-1-spec 2.2)")
         return EXIT_PORT_BOUND
     journal.write("listening", host=HOST, port=config["port"])
+    if stats.paused:
+        journal.write("emergency_pause_active", level="warning")
+
+    # The dashboard is optional: failing to bind it never stops the agent.
+    dash_server = None
+    if config["dashboard_port"]:
+        token = make_token()
+        dash = Dashboard(token, config["dashboard_port"], stats, config,
+                         state_dir() / "journal.jsonl", journal)
+        try:
+            dash_server = await asyncio.start_server(dash.handle, HOST, config["dashboard_port"], limit=8192)
+            write_url_file(state_dir(), config["dashboard_port"], token)
+            journal.write("dashboard_listening", port=config["dashboard_port"])
+        except OSError as e:
+            journal.write("dashboard_bind_failed", level="warning", port=config["dashboard_port"], reason=str(e))
 
     async def heartbeat_task() -> None:
         freeze_after = os.environ.get(DEBUG_FREEZE_ENV)
@@ -251,6 +270,9 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
         finally:
             server.close()  # closes open sessions with 1001 (going away)
             await server.wait_closed()
+            if dash_server is not None:
+                dash_server.close()
+                (state_dir() / "dashboard.url").unlink(missing_ok=True)
 
     # Step 7: one TaskGroup for the main loop.
     async with asyncio.TaskGroup() as tg:
@@ -317,7 +339,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Android Agent Python Brain")
     parser.add_argument("--check", action="store_true",
                         help="run pre-flight checks, print key=value lines, exit 0 only if all pass")
+    parser.add_argument("--dashboard-url", action="store_true",
+                        help="print the running agent's private dashboard link")
     args = parser.parse_args()
+
+    if args.dashboard_url:
+        url_file = state_dir() / "dashboard.url"
+        if not url_file.exists():
+            print("dashboard not running (is the agent started?)", file=sys.stderr)
+            return EXIT_CONFIG
+        print(url_file.read_text().strip())
+        return EXIT_NORMAL
 
     if args.check:
         results = check_environment()
