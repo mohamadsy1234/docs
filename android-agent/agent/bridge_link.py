@@ -14,9 +14,8 @@ from websockets.exceptions import ConnectionClosed
 
 import protocol
 from protocol import ProtocolError
+from replier import DUMMY_REPLY, DummyReplier, ReplyError  # noqa: F401 (DUMMY_REPLY re-exported for tests)
 
-# Sprint 1: a fixed proposal stands in for the LLM (mvp-1-spec.md, 6).
-DUMMY_REPLY = "رد تجريبي من الوكيل (Sprint 1)"
 MAX_TEXT = 4096
 SEEN_EVENTS = 1000
 
@@ -53,11 +52,13 @@ def _check_fields(message: Dict[str, Any]) -> None:
 
 
 class BridgeLink:
-    def __init__(self, secret: bytes, config: Dict[str, Any], journal: Any, stats: Any = None):
+    def __init__(self, secret: bytes, config: Dict[str, Any], journal: Any, stats: Any = None,
+                 replier: Any = None):
         self._secret = secret
         self._config = config
         self._journal = journal
         self._stats = stats if stats is not None else _NoStats()
+        self._replier = replier if replier is not None else DummyReplier()
         self._current: Optional[ServerConnection] = None
         self._seen: "OrderedDict[str, None]" = OrderedDict()
 
@@ -145,17 +146,26 @@ class BridgeLink:
                 return
             # Each proposal runs on its own task, so a slow LLM call for one
             # sender never delays the next incoming message (1.3).
-            tg.create_task(self._propose(token, send))
+            tg.create_task(self._propose(token, message["sender_name"], message["text"], send))
         else:
             self._journal.write(kind, reply_token=token)
             self._stats.resolved(token, {"notification_sent": "sent", "proposal_ignored": "ignored",
                                          "notification_expired": "expired"}[kind])
 
-    async def _propose(self, token: str, send: Callable[[Dict[str, Any]], Any]) -> None:
+    async def _propose(self, token: str, sender_name: str, text: str,
+                       send: Callable[[Dict[str, Any]], Any]) -> None:
         await asyncio.sleep(self._config["dummy_reply_delay"])
+        try:
+            proposal = await self._replier.propose(sender_name, text)
+        except Exception as e:  # ReplyError, or a bug: never take the session down
+            # No proposal means no shadow notification; the user just answers in WhatsApp.
+            reason = str(e) if isinstance(e, ReplyError) else f"replier_error: {type(e).__name__}"
+            self._journal.write("proposal_failed", level="warning", reply_token=token, reason=reason)
+            self._stats.proposal_failed(token, reason)
+            return
         if self._stats.paused:  # paused while this proposal was being prepared
             self._journal.write("proposal_withheld", reply_token=token, reason="paused")
             return
-        await send({"type": "propose_reply", "reply_token": token, "proposed_text": DUMMY_REPLY})
-        self._journal.write("proposal_sent", reply_token=token)
-        self._stats.proposal_sent(token, DUMMY_REPLY)
+        await send({"type": "propose_reply", "reply_token": token, "proposed_text": proposal})
+        self._journal.write("proposal_sent", reply_token=token, engine=self._replier.name)
+        self._stats.proposal_sent(token, proposal)

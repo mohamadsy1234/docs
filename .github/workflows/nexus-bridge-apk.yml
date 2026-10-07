@@ -26,7 +26,7 @@ jobs:
 
       - name: Agent tests (Python)
         run: |
-          pip install websockets
+          pip install websockets anthropic
           python -m unittest discover -s android-agent/agent/tests -v
 
       - uses: actions/setup-java@v4

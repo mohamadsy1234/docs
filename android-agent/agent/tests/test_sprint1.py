@@ -42,6 +42,10 @@ def free_port() -> int:
 
 class AgentProcessCase(unittest.IsolatedAsyncioTestCase):
     extra_config = ""
+    extra_env_lines = ""  # appended to ~/.config/agent/.env
+
+    def process_env(self):
+        return {}
 
     async def asyncSetUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -53,10 +57,10 @@ class AgentProcessCase(unittest.IsolatedAsyncioTestCase):
             f"port = {self.port}\nhandshake_timeout = 1.0\n{self.extra_config}")
         self.secret = secrets.token_bytes(32)
         env_file = config_dir / ".env"
-        env_file.write_text(f"API_SECRET={self.secret.hex()}\n")
+        env_file.write_text(f"API_SECRET={self.secret.hex()}\n{self.extra_env_lines}")
         env_file.chmod(0o600)
         self.proc = subprocess.Popen([sys.executable, str(AGENT_DIR / "agent.py")],
-                                     env={**os.environ, "HOME": str(self.home)},
+                                     env={**os.environ, "HOME": str(self.home), **self.process_env()},
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         await self.wait_for_event("listening")
 

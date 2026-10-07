@@ -10,6 +10,12 @@ if ! python3 agent.py --check; then
     exit 1
 fi
 
+if grep -q '^ANTHROPIC_API_KEY=.' "$HOME/.config/agent/.env" 2>/dev/null && python3 -c 'import anthropic' 2>/dev/null; then
+    echo "Replies: Claude"
+else
+    echo "Replies: fixed test text (add ANTHROPIC_API_KEY and 'pip install anthropic' for Claude, see ../START.md)"
+fi
+
 # Keep the CPU awake while the agent runs (needs the Termux:API app).
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock
 
