@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NEXUS Bridge</string>
+    <string name="channel_shadow">اقتراحات الردود</string>
+    <string name="channel_alerts">تنبيهات الجسر</string>
+    <string name="shadow_title">🤖 اقتراح رد لـ %1$s</string>
+    <string name="action_send">إرسال فوراً</string>
+    <string name="action_ignore">تجاهل</string>
+    <string name="expired">انتهت صلاحية الاقتراح</string>
+    <string name="send_failed">تعذّر الإرسال: الرسالة الأصلية لم تعد متاحة (%1$s)</string>
+    <string name="untrusted_server">خادم غير موثوق على المنفذ 8000</string>
+    <string name="untrusted_server_detail">خادم غير موثوق على المنفذ 8000: فشل التحقق من هوية الوكيل عدة مرات. قد يكون تطبيق آخر يحجز المنفذ، أو المفتاح في Termux لا يطابق مفتاح هذا التطبيق.</string>
+
+    <string name="status_line">STATUS: %1$s</string>
+    <string name="section_status">حالة النظام</string>
+    <string name="row_agent">الوكيل في Termux</string>
+    <string name="row_listener">قراءة إشعارات واتساب</string>
+    <string name="row_post">عرض إشعارات الظل</string>
+    <string name="row_consent">الموافقة على المعالجة</string>
+    <string name="agent_on">متصل</string>
+    <string name="agent_off">بانتظار الوكيل</string>
+    <string name="on">مفعّلة</string>
+    <string name="off">غير مفعّلة</string>
+    <string name="fix">تفعيل</string>
+
+    <string name="m_forwarded">رسائل للوكيل</string>
+    <string name="m_sent">أرسلتَها</string>
+    <string name="m_ignored">تجاهلتها</string>
+    <string name="m_expired">انتهت أو فشلت</string>
+
+    <string name="section_pairing">الاقتران مع Termux</string>
+    <string name="secret_label">انسخ المفتاح ثم في Termux: termux-clipboard-get &gt; ~/.config/agent/.env</string>
+    <string name="copy">نسخ المفتاح</string>
+    <string name="copied">نُسخ المفتاح</string>
+    <string name="show">إظهار</string>
+    <string name="hide">إخفاء</string>
+
+    <string name="section_consent">الموافقة</string>
+    <string name="consent">أوافق على إرسال نص الرسائل الواردة إلى الوكيل، ومنه إلى مزوّد LLM سحابي</string>
+
+    <string name="section_events">آخر الأحداث</string>
+    <string name="no_events">لا أحداث بعد</string>
+    <string name="e_forwarded">رسالة أُرسلت للوكيل</string>
+    <string name="e_sent">أرسلتَ الرد</string>
+    <string name="e_ignored">تجاهلتَ الاقتراح</string>
+    <string name="e_expired">انتهت الصلاحية (قُرئت المحادثة)</string>
+    <string name="e_send_failed">فشل الإرسال</string>
+    <string name="e_send_expired">اقتراح منتهي الصلاحية</string>
+    <string name="e_session_opened">اتصل الوكيل</string>
+    <string name="e_session_closed">انقطع الوكيل</string>
+    <string name="e_handshake_failed">فشل التحقق من الوكيل</string>
+    <string name="e_dropped_offline">رسالة لم تُرسل: الوكيل غير متصل</string>
+    <string name="e_unknown_token">اقتراح مجهول رُفض</string>
+
+    <string name="footer_send_rule">لا يُرسل أي رد إلا بنقرتك على إشعار الظل بعد فتح قفل الهاتف.</string>
+</resources>
