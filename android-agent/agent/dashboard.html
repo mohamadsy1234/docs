@@ -336,7 +336,9 @@ input[type=search],select{background:rgba(0,0,0,.5);border:1px solid rgba(255,25
     <section class="view" id="view-brain" aria-label="العقل والتعليمات">
       <div class="panel glass">
         <h2>العقل والتعليمات</h2>
-        <div class="notice" id="brainNote">—</div>
+        <div class="notice">
+          المرحلة الحالية Sprint 1: الوكيل يرد بنص تجريبي ثابت للتحقق من المسار كاملاً. ربط LLM الفعلي، والبصمة الشخصية (System Prompt) المستخرجة من محادثاتك، تأتي في الخطوة التالية من MVP-1، وتُضبط من ملف الإعدادات في Termux لا من هذه الصفحة.
+        </div>
         <h3>الاقتراح الحالي</h3>
         <div class="bubble out" id="dummyText">—</div>
       </div>
@@ -602,7 +604,7 @@ input[type=search],select{background:rgba(0,0,0,.5);border:1px solid rgba(255,25
         who.append(av, meta);
         var bin = el('div', 'bubble in'); bin.append(el('label', null, 'الرسالة الواردة'), document.createTextNode(p.text));
         var bout = el('div', 'bubble out');
-        bout.append(el('label', null, p.proposal ? 'الاقتراح المعروض على هاتفك' : (p.failed ? 'لا اقتراح' : 'يُعدّ الاقتراح…')), document.createTextNode(p.proposal || (p.failed ? 'تعذّر الاقتراح: ' + p.failed : (paused ? 'محجوب: إيقاف الطوارئ مفعّل' : '…'))));
+        bout.append(el('label', null, p.proposal ? 'الاقتراح المعروض على هاتفك' : 'يُعدّ الاقتراح…'), document.createTextNode(p.proposal || (paused ? 'محجوب: إيقاف الطوارئ مفعّل' : '…')));
         card.append(who, bin, bout);
         box.appendChild(card);
       });
@@ -612,11 +614,7 @@ input[type=search],select{background:rgba(0,0,0,.5);border:1px solid rgba(255,25
 
     if (activeTab === 'brain') {
       var lastProp = pend.find(function (p) { return p.proposal; });
-      $('dummyText').textContent = lastProp ? lastProp.proposal : '—';
-      $('brainNote').textContent = (s.brain === 'dummy'
-        ? 'المحرك: نص تجريبي ثابت. لتفعيل Claude أضف ANTHROPIC_API_KEY إلى ‎~/.config/agent/.env‎ وثبّت الحزمة anthropic، ثم أعد تشغيل الوكيل.'
-        : 'المحرك: Claude (' + s.brain + '). يكتب اقتراحاً بأسلوبك لكل رسالة، ولا يُرسل شيء إلا بنقرتك على هاتفك. يُضبط النموذج والأسلوب من ‎config.toml‎ في Termux لا من هذه الصفحة.')
-        + (s.last_failure ? ' آخر خطأ: ' + s.last_failure : '');
+      $('dummyText').textContent = lastProp ? lastProp.proposal : 'رد تجريبي من الوكيل (Sprint 1)';
     }
 
     if (activeTab === 'device') {

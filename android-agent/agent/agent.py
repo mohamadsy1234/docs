@@ -44,13 +44,7 @@ DEFAULTS: Dict[str, Any] = {
     "handshake_timeout": 5.0,
     "dummy_reply_delay": 0.0,
     "dashboard_port": 8001,  # 0 disables the local dashboard
-    # Proposal engine (replier.py). Claude is used when ANTHROPIC_API_KEY is in .env.
-    "llm_model": "claude-opus-5-5",
-    "llm_effort": "low",  # short chat replies; low | medium | high | xhigh | max
-    "llm_timeout": 30.0,
-    "llm_persona": "",  # optional: who the owner is and how they write
 }
-LLM_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 # Test hook for the 1.4 acceptance criterion: block the event loop after N
 # seconds so the watchdog has something to catch.
@@ -117,15 +111,13 @@ def load_config() -> Dict[str, Any]:
         if not isinstance(value, type(DEFAULTS[key])) or isinstance(value, bool):
             raise StartupError(EXIT_CONFIG, f"config key {key!r} has the wrong type")
         config[key] = value
-    if config["llm_effort"] not in LLM_EFFORTS:
-        raise StartupError(EXIT_CONFIG, f"llm_effort must be one of {LLM_EFFORTS}")
     if not 0 < config["heartbeat_interval"] < config["watchdog_timeout"]:
         raise StartupError(EXIT_CONFIG, "need 0 < heartbeat_interval < watchdog_timeout")
     return config
 
 
-def read_env() -> Dict[str, str]:
-    """Key=value lines of ~/.config/agent/.env, which must have mode 600."""
+def load_secret() -> bytes:
+    """Read API_SECRET (64 hex chars = 256 bits) from ~/.config/agent/.env."""
     path = config_dir() / ".env"
     try:
         mode = path.stat().st_mode
@@ -133,18 +125,11 @@ def read_env() -> Dict[str, str]:
         raise StartupError(EXIT_SECRET, f"{path} not found")
     if stat.S_IMODE(mode) & 0o077:
         raise StartupError(EXIT_SECRET, f"{path} must have mode 600")
-    env = {}
+    secret_hex = None
     for line in path.read_text(encoding="utf-8").splitlines():
         key, sep, value = line.strip().partition("=")
-        if sep:
-            env[key.strip()] = value.strip().strip('"').strip("'")
-    return env
-
-
-def load_secret() -> bytes:
-    """Read API_SECRET (64 hex chars = 256 bits) from ~/.config/agent/.env."""
-    path = config_dir() / ".env"
-    secret_hex = read_env().get("API_SECRET")
+        if sep and key.strip() == "API_SECRET":
+            secret_hex = value.strip().strip('"').strip("'")
     if secret_hex is None:
         raise StartupError(EXIT_SECRET, f"API_SECRET missing in {path}")
     try:
@@ -218,7 +203,6 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
 
     from bridge_link import BridgeLink
     from dashboard import Dashboard, make_token, write_url_file
-    from replier import make_replier
     from stats import AgentStats
 
     loop = asyncio.get_running_loop()
@@ -245,16 +229,13 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
     # Step 6: bind the real listening socket; failure means exit 2.
     try:
         stats = AgentStats(state_dir() / "paused")
-        replier = make_replier(config, read_env().get("ANTHROPIC_API_KEY"))
-        stats.brain = config["llm_model"] if replier.name == "claude" else "dummy"
-        link = BridgeLink(secret, config, journal, stats, replier)
+        link = BridgeLink(secret, config, journal, stats)
         server = await serve(link.handle, HOST, config["port"], max_size=64 * 1024)
     except OSError as e:
         journal.write("port_bind_failed", level="error", port=config["port"], reason=str(e),
                       note="port taken: possible squatting by another app (mvp-1-spec 2.2)")
         return EXIT_PORT_BOUND
     journal.write("listening", host=HOST, port=config["port"])
-    journal.write("brain", engine=replier.name, model=stats.brain)
     if stats.paused:
         journal.write("emergency_pause_active", level="warning")
 
@@ -292,7 +273,6 @@ async def run_agent(config: Dict[str, Any], journal: Journal, memory: sqlite3.Co
             if dash_server is not None:
                 dash_server.close()
                 (state_dir() / "dashboard.url").unlink(missing_ok=True)
-            await replier.close()
 
     # Step 7: one TaskGroup for the main loop.
     async with asyncio.TaskGroup() as tg:
