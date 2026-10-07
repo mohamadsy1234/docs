@@ -21,6 +21,7 @@ import android.provider.Settings
 import android.text.format.DateFormat
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.Button
@@ -143,6 +144,12 @@ class MainActivity : Activity() {
             setBackgroundColor(BG)
             isFillViewport = true
             addView(root)
+            // Android 15 draws apps edge to edge: keep content clear of the status and navigation bars.
+            setOnApplyWindowInsetsListener { v, insets ->
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                insets
+            }
         })
     }
 
